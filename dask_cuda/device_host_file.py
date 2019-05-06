@@ -57,44 +57,42 @@ class DeviceHostFile(ZictBase):
     ):
         path = os.path.join(local_dir, "storage")
 
-        self.host_func = dict()
-        self.disk_func = Func(
+        self.device = dict()
+        self.host = dict()
+        self.disk = Func(
             partial(serialize_bytes, on_error="raise"), deserialize_bytes, File(path)
         )
-        self.host = Buffer(self.host_func, self.disk_func, memory_limit, weight=weight)
 
-        self.device_func = dict()
-        self.device_host_func = Func(
-            _serialize_if_device, _deserialize_if_device, self.host
+        self.host_disk = Buffer(self.host, self.disk, memory_limit, weight=weight)
+        self._device_host_func = Func(
+            _serialize_if_device, _deserialize_if_device, self.host_disk
         )
-        self.device = Buffer(
-            self.device_func, self.device_host_func, device_memory_limit, weight=weight
+        self.device_host_disk = Buffer(
+            self.device, self._device_host_func, device_memory_limit, weight=weight
         )
-
-        self.fast = self.host.fast
 
     def __setitem__(self, key, value):
         if _is_device_object(value):
-            self.device[key] = value
+            self.device_host_disk[key] = value
         else:
-            self.host[key] = value
+            self.host_disk[key] = value
 
     def __getitem__(self, key):
-        if key in self.host:
-            obj = self.host[key]
-            del self.host[key]
-            self.device[key] = _deserialize_if_device(obj)
+        if key in self.host_disk:
+            obj = self.host_disk[key]
+            del self.host_disk[key]
+            self.device_host_disk[key] = _deserialize_if_device(obj)
 
-        if key in self.device:
-            return self.device[key]
+        if key in self.device_host_disk:
+            return self.device_host_disk[key]
         else:
             raise KeyError
 
     def __len__(self):
-        return len(self.device)
+        return len(self.device_host_disk)
 
     def __iter__(self):
-        return iter(self.device)
+        return iter(self.device_host_disk)
 
     def __delitem__(self, i):
-        del self.device[i]
+        del self.device_host_disk[i]
